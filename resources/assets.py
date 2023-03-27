@@ -20,9 +20,12 @@ with open(file_path, "r+") as f:
         f.write(inputdir)
         
 
-outputdir= os.path.join(inputdir,'AASoutput')
+outputdir= os.path.join(inputdir,'substitutionannotation output')
 if not os.path.exists(outputdir):
-    os.mkdir(outputdir)
+    try:
+        os.mkdir(outputdir)
+    except:
+        inputdir = input(inputdir +' is not a valid directory. Please try again.')
 
 #Commonly used lists
 
@@ -107,3 +110,7 @@ aminoacids = ['Ala', 'Arg','Asn','Asp','Cys','Glu','Gln','Gly',
               'Thr','Trp','Tyr','Val']
 
 
+#%%
+def changeDir(newdir):
+    with open(file_path, "w") as f:
+        f.write(newdir)

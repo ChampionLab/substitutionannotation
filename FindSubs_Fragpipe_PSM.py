@@ -7,13 +7,13 @@ Created on Thu Feb 25 11:43:35 2021
 """
 """Program to count the subs from FragPipe v17,
  Mass-Offset-Substitutions Good LFQ workflow output"""
-
+#%%
 import pandas as pd
 import numpy as np
 import os
 import re 
 import datetime
-from tjl.params import tjlassets as p
+from substitutionannotation.resources import assets as p
 
 #Regex capture pattern to get sample name from file name
 #regexSample = 'GB_(.*)-'
@@ -182,6 +182,16 @@ def GetBaseBy(row):
             return None
     return result
 #%%
+def ExpIL(dfin,sequencecolumn): 
+    """"Split list of possible sequences in provided
+ df[sequencecolumn using , as delimiter, expanding the rows for each sequence."""
+    df = dfin.copy()
+    df[sequencecolumn] = df.loc[:,sequencecolumn].str.split(',')
+    df = df.explode(sequencecolumn)
+    return df
+
+
+#%%
 #Inputs
 dfdm = pd.read_csv(r'C:\Users\taylo\anaconda3\Lib\tjl\params\dmMatrix.csv',index_col=0).astype(float)
 if os.path.isdir(p.outputdir):
@@ -219,7 +229,7 @@ columns = ['Spectrum','Peptide','Modified Peptide','Calibrated Observed Mass',
 #versions of file.psm output of FragPipe
 columns += ['Prev AA','Protein Start','Protein End','MSFragger Localization']
 #Comment this out if not using TIMSTOF data
-columns =+ ['Ion Mobility']
+columns += ['Ion Mobility']
 
 #Pull out PSM info
 df = pd.DataFrame()
@@ -285,7 +295,7 @@ df.loc[:,'Is Base'] = df['Is Base'] & df['Peptide'].isin(modpeplist)
 #Get Modified Peptide
 
 df[['Origin','Destination','Substituted Sequence']] = FindTargets(df)
-df = p.ExpIL(df,'Substituted Sequence')
+df = ExpIL(df,'Substituted Sequence')
 
 #%%
 print('Getting Base Peptide Info...')
@@ -342,10 +352,11 @@ dfintensity = dfintensity.merge(protbySample, how='left',left_index=True,right_i
 dftech = dftech.merge(dfintensity[['Base Intensity','Protein Intensity']],
                       how='left',left_on=['Protein','Sample'],right_index=True)
 dfintensity = dfintensity.reset_index()
-dfintensity = dfintensity[~dfintensity['Protein'].str.contains('(cont|rev_)')]
-dftech = dftech[~dftech['Protein'].str.contains('(cont|rev_)')]
+dfintensity = dfintensity[~dfintensity['Protein'].str.contains('cont|rev_')]
+dftech = dftech[~dftech['Protein'].str.contains('cont|rev_')]
 #Get normalized values
 
+dfintensity['logIntensity'] = np.log10(dfintensity['Intensity'].replace(0,np.nan))
 dfintensity['Fraction'] = dfintensity['Intensity']/(
     dfintensity['Base Intensity'] + dfintensity['Intensity'])
 dfintensity['logFraction'] = np.log10(dfintensity['Fraction'].replace(0,np.nan))
@@ -354,6 +365,7 @@ dfintensity['logRatio'] = np.log10(dfintensity['Ratio'].replace(0,np.nan))
 dfintensity['Normalized'] = dfintensity['Ratio']/(dfintensity['Protein Intensity'])
 dfintensity['logNormalized'] = np.log10(dfintensity['Normalized'].replace([0,np.inf,-np.inf],np.nan))
 
+dftech['logIntensity'] = np.log10(dftech['Intensity'].replace(0,np.nan))
 dftech['Fraction'] = dftech['Intensity']/(
     dftech['Base Intensity'] + dftech['Intensity'])
 dftech['logFraction'] = np.log10(dftech['Fraction'].replace(0,np.nan))
@@ -377,7 +389,7 @@ df.to_csv(os.path.join(p.outputdir,'AllPSMsAndFilters.csv'),index=False)
 
 
 #%%
-#Create global Substitution frequencies by sample
+#Plot global Substitution frequencies by sample
 print('Making plots')
 now = datetime.datetime.now()
 print(str(now))
@@ -395,8 +407,8 @@ plt.suptitle('Ratio normalized sub intensity')
 plt.savefig(os.path.join(p.outputdir,'Ratio normalized sub intensity.png'))
 plt.figure()
 sns.violinplot(data=dfintensity,x='Sample',y='logNormalized')
-plt.suptitle('Protein normalized sub intensity')
-plt.savefig(os.path.join(p.outputdir,'Protein normalized sub intensity.png'))
+plt.suptitle('Protein normalized sub ratio')
+plt.savefig(os.path.join(p.outputdir,'Protein normalized sub ratio.png'))
 
 for col in dfreproducability.columns:
     plt.figure()
