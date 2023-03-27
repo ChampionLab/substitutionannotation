@@ -8,6 +8,7 @@ Common resources
 import os
 import pandas as pd
 import datetime
+import numpy as np
 
 package_dir = os.path.dirname(os.path.split(os.path.abspath(__file__))[0])
 file_path = os.path.join(package_dir, 'temp', 'data_directory.txt')
@@ -110,7 +111,12 @@ aminoacids = ['Ala', 'Arg','Asn','Asp','Cys','Glu','Gln','Gly',
               'Thr','Trp','Tyr','Val']
 
 
-#%%
 def changeDir(newdir):
     with open(file_path, "w") as f:
         f.write(newdir)
+
+def log10CV(series):
+    """
+    A function to return the %CV for log10 transformed data
+    """
+    return np.sqrt(10**(np.log(10)*np.std(series)**2)-1)*100
