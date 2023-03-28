@@ -13,11 +13,9 @@ import numpy as np
 import os
 import re 
 import datetime
+from tqdm import tqdm
 from substitutionannotation.resources import assets as p
-
-#Regex capture pattern to get sample name from file name
-#regexSample = 'GB_(.*)-'
-    
+   
 
 #Use a dictionary which assigns I and L to 'Leu/Ile' to reflect isobaric masses
 dict_123 = {'G': 'Gly',
@@ -218,7 +216,6 @@ fileSample['Raw File'] = fileSample['Raw File'].apply(lambda x: os.path.split(x)
 fileSample = fileSample.astype(str)
 fileSample['Raw File'] = fileSample['Raw File'].str.replace('\.raw|\.d','')
 fileSample = fileSample.set_index('Raw File')
-#rawFileNames = '|'.join(fileSample['Raw File'])
 
 columns = ['Spectrum','Peptide','Modified Peptide','Calibrated Observed Mass',
            'Intensity','Peptide Length','Assigned Modifications','Protein',
@@ -264,8 +261,10 @@ print('Localizations determined...')
 print('Naming modifications, this may take some time...')
 now = datetime.datetime.now()
 print(str(now))
+#Prep the processing progress bar
+progress_bar = tqdm(total=len(df.index))
 #Get PTMs with best guess OR ambiguous MSFragger localization
-df[['PTMs','All Possible Substitutions']] = df.apply(lambda x:getPTMs(x),
+df[['PTMs','All Possible Substitutions']] = df.apply(lambda x:(getPTMs(x),progress_bar.update(1))[0],
                                                 axis=1,result_type='expand')
 
 df.loc[:,'PTMs'] = df['PTMs'].fillna('NONE')
@@ -311,6 +310,11 @@ df['Replicate'] = df['Raw File'].apply(lambda x: fileSample.loc[x,'Replicate'])
 dfsubs = df[df['Is Sub']]
 dfsubs = dfsubs[~dfsubs['Is Danger']]
 dfsubs.reset_index(inplace=True)
+
+#Get substituted position relative to the protein
+dfsubs['Substitution Position'] =  dfsubs['Modified Peptide'].apply(
+    lambda x:re.search('.\[',x).start()) + dfsubs['Protein Start']
+
 
 #Aggregate PSMs->Modified Sequences, by file, taking the max intensity
 dfintensity = dfsubs.groupby(by=['Sample','Modified Peptide'])['Intensity'].max().to_frame()

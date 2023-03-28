@@ -48,7 +48,7 @@ dfAnnotate = pd.read_csv(os.path.join(p.outputdir,'SSP PSM.csv'))
 #Subs with intensity, base peptide intensity, and protein intensity in the same sample,
 # have already been processed by FindSubs_Fragpipe_PSM.py
 
-missingoffset = 0.9
+missingoffset = 1.1
 
 #Get unique Sample and replicate names
 samples = dfSubs['Sample'].unique()
@@ -62,26 +62,6 @@ for sample in samples:
     sampleReplicateDict[sample] = bySample.get_group(sample)['Replicate'].drop_duplicates().to_list()
 
      
-
-#get FASTA and protein sequence info
-fastadir = r"C:\Users\taylo\Documents\Notre Dame\Lab\FASTA\2022-03-26-decoys-contam-UP_2022_03_25_EcoliK12.fasta.fas"
-file = open(fastadir,mode='r')
-dfproteins = pd.DataFrame(columns=['Header','Sequence'])
-i=1
-accession = 'Failed'
-while True:
-    i +=1
-    line = file.readline()
-    if line == '':
-        break
-    if i%2 == 0:
-        accession = re.search(r'\|(.*)\|',line).group(1)
-        dfproteins.loc[accession,'Header'] = line
-    if i%2 == 1:
-        dfproteins.loc[accession,'Sequence'] = line
-
-dfAnnotate['Substitution Position'] =  dfAnnotate['Modified Peptide'].apply(
-    lambda x:re.search('.\[',x).start()) + dfAnnotate['Protein Start']
 #%%
 #Start Dash
 
@@ -251,17 +231,17 @@ def update_scatterTechReps(sampleSelected,techRep1,techRep2,inSignal):
                             name='y=x'),
                             row=2,col=1)
     #20% above y=x line
-    fig.add_trace(go.Scatter(x=[-12.079,10.079],y=[-12.079,10.079],
+    fig.add_trace(go.Scatter(x=[-12,10],y=[-12.079,10.079],
                              mode='lines',marker_color='rgba(130,130,130)',
                             showlegend=False,
-                            line=dict(width=1),
+                            line=dict(dash='dash', width=1),
                             name='y=x'),
                             row=2,col=1)
     #20% below y=x line
-    fig.add_trace(go.Scatter(x=[-11.903,9.903],y=[-11.903,9.903],
+    fig.add_trace(go.Scatter(x=[-12,10],y=[-11.903,9.903],
                              mode='lines',marker_color='rgba(130,130,130)',
                             showlegend=False,
-                            line=dict(width=1),
+                            line=dict(dash='dash', width=1),
                             name='y=x'),
                             row=2,col=1)
     
