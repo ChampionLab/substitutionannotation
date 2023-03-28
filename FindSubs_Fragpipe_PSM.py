@@ -110,8 +110,8 @@ def getPTMs(row):
             safebool = False
         
         #If the modified residues don't explicitly apply to possible danger mods, check ambiguity
-        if p.dfdangermods.loc[dangerindx,'Modified Residues'].str.contains('B').any():
-           safebool = False #B is used for mods which apply to any residue
+        if p.dfdangermods.loc[dangerindx,'Modified Residues'].str.contains('X').any():
+           safebool = False #X is used for mods which apply to any residue
         #If the mod applies to a position
         if p.dfdangermods.loc[dangerindx,'Modified Position'].any():
             for possiblepos in p.dfdangermods.loc[dangerindx,'Modified Position']:

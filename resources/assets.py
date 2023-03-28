@@ -115,6 +115,11 @@ def changeDir(newdir):
     with open(file_path, "w") as f:
         f.write(newdir)
 
+def clearDir():
+    """Clears the .txt file used to store the working data directoty"""
+    with open(file_path, "w") as f:
+        f.write('')
+        
 def log10CV(series):
     """
     A function to return the %CV for log10 transformed data

@@ -1,29 +1,29 @@
 ﻿Modification,Observed Modifications,Mass Shift,Modified Residues,Modified Position
 Failed_Carbamidomethylation/Deletion of G,Failed_Carbamidomethylation/Deletion of G,-57.021464,"C,G",
 Homoserine,Homoserine,-29.992806,M,
-Pyro-glu from E/dehydration,pyro-Glu,-18.010565,"E,B",1
-Dehydration,Dehydrated,-18.010565,"B,D,Y,T,S",
-Pyro-glu from Q/Loss of ammonia,Ammonia-loss,-17.026549,"Q,B",1
+Pyro-glu from E/dehydration,pyro-Glu,-18.010565,"E,X",1
+Dehydration,Dehydrated,-18.010565,"X,D,Y,T,S",
+Pyro-glu from Q/Loss of ammonia,Ammonia-loss,-17.026549,"Q,X",1
 Half of a disulfide bridge,Half of a disulfide bridge,-1.007825,C,
-Amidation,Amidated,-0.984016,B,
-Unmodified,Unmodified,0,B,
+Amidation,Amidated,-0.984016,X,
+Unmodified,Unmodified,0,X,
 Deamidation,Deamidated,0.984016,"N,Q,R",
-First isotopic peak,First isotopic peak,1.003355,B,
-Second isotopic peak,Second isotopic peak,2.00671,B,
-Third isotopic peak/13C3 label for SILAC,Third isotopic peak/13C3 label for SILAC,3.010065,B,
-formaldehyde adduct,formaldehyde adduct,12,B,
+First isotopic peak,First isotopic peak,1.003355,X,
+Second isotopic peak,Second isotopic peak,2.00671,X,
+Third isotopic peak/13C3 label for SILAC,Third isotopic peak/13C3 label for SILAC,3.010065,X,
+formaldehyde adduct,formaldehyde adduct,12,X,
 Methylation,Methyl,14.01565,"K,R,D,T,S,H,E",
-Oxidation and Hydroxylation,Oxidation,15.994915,B,
-Sodium adduct,Sodium adduct,21.981943,"B,D,E",
+Oxidation and Hydroxylation,Oxidation,15.994915,X,
+Sodium adduct,Sodium adduct,21.981943,"X,D,E",
 di-Methylation/Acetaldehyde +28/Ethylation,Dimethyl,28.0313,"K,R,D,E",
 dihydroxy,Dioxidation,31.989829,"C,Y,W,R,P,K,F,M",
-Replacement of proton by potassium,Replacement of proton by potassium,37.955882,"B,D,E",
-S-carbamoylmethylcysteine cyclization (N-terminus),S-carbamoylmethylcysteine cyclization (N-terminus),39.994915,B,
+Replacement of proton by potassium,Replacement of proton by potassium,37.955882,"X,D,E",
+S-carbamoylmethylcysteine cyclization (N-terminus),S-carbamoylmethylcysteine cyclization (N-terminus),39.994915,X,
 Acetylation,Acetyl,42.010565,"T,S,C,Y,H,K",1
 Carbamylation,Carbamyl,43.005814,K,1
-Replacement of 3 protons by iron,Replacement of 3 protons by iron,52.911464,"B,D,E",
-Replacement of 2 protons by iron,Replacement of 2 protons by iron,53.919289,"B,D,E",
+Replacement of 3 protons by iron,Replacement of 3 protons by iron,52.911464,"X,D,E",
+Replacement of 2 protons by iron,Replacement of 2 protons by iron,53.919289,"X,D,E",
 Carbamidomethylation,Carbamidomethylation,57.021464,"C,K,D,H,E",1
-Addition of lysine due to transpeptidation/Addition of K,Addition of lysine due to transpeptidation/Addition of K,128.094963,B,
+Addition of lysine due to transpeptidation/Addition of K,Addition of lysine due to transpeptidation/Addition of K,128.094963,X,
 Biotinylation,Biotinylation,226.077598,K,1
 Phosphorylation,Phosphorylation,79.966331,STY,
