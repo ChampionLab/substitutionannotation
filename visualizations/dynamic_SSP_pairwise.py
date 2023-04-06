@@ -40,7 +40,7 @@ dfAnnotate = pd.read_csv(os.path.join(p.outputdir,'SSP PSM.csv'))
 # in the same sample have already been processed by FindSubs_Pragpipe_PSM.py
 
 
-dfSubs = dfSubs.merge(dfAnnotate[['Modified Peptide','PTMs']].drop_duplicates(),on='Modified Peptide',how='left')
+dfSubs = dfSubs.merge(dfAnnotate[['Modified Peptide','PTMs','Substitution Position']].drop_duplicates(),on='Modified Peptide',how='left')
 dfReplicates = dfReplicates.merge(dfAnnotate[['Modified Peptide','PTMs']].drop_duplicates(),on='Modified Peptide',how='left')
 samples = dfSubs['Sample'].drop_duplicates().reset_index(drop=True)
 bySample = dfSubs.groupby(by=['Sample'])
@@ -64,6 +64,9 @@ while True:
         dfproteins.loc[accession,'Header'] = line
     if i%2 == 1:
         dfproteins.loc[accession,'Sequence'] = line
+
+eftu = dfSubs.loc[dfSubs['Protein'].str.contains('EFTU'),'Protein'].max()
+
 
 #%%
 #Start Dash
@@ -117,12 +120,12 @@ def render_content(tab):
             html.Div(children=[
                 html.H3('Substitution Frequency by Protein'),
                 html.Br(),
-                html.Label('Multi-Select Dropdown'),
+                html.Label('Samples to compare'),
                 dcc.Dropdown(options=samples,value=samples[0],id='freq_prot_top'),
                 dcc.Dropdown(options=samples,value=samples[1],id='freq_prot_bottom'),
                 html.Br(),
                 dcc.Dropdown(options=dfSubs['Protein'].unique(),id='dropProtein',
-                             value='P0CE47|EFTU1'),
+                             value=eftu),
                 dcc.Graph(
                     id='notManhattan')
                 ],style={'padding':5,'flex'
@@ -162,7 +165,7 @@ def update_freq_violin(subfilter):
     dff = dff.groupby(by='Sample')
 
     # Create a list of scales for each sample based on the number of peptides
-    scales = pd.Series()
+    scales = pd.Series(dtype='float64')
     for sample in samples:
         try:
             scales.loc[sample] = len(dff.get_group(sample))
@@ -328,16 +331,35 @@ def update_frequency_scatter(freq_scatter_x,freq_scatter_y):
 @app.callback(
     Output(component_id='notManhattan', component_property='figure'),
     Input(component_id='dropProtein', component_property='value'),
-    Input(component_id='dropSample', component_property='value')
+    Input(component_id='freq_prot_top', component_property='value'),
+    Input(component_id='freq_prot_bottom', component_property='value')
 )
-def updateNotManhattan(dropProtein,dropSample):
-    dff = dfSubs[(dfSubs['Protein'].str.contains(dropProtein)&dfSubs['Sample'].isin(dropSample))]
-    accession = re.match('.*(?=\|)',dropProtein)[0]
+def updateNotManhattan(dropProtein,sampleTop,sampleBot):
+    dff = dfSubs[(dfSubs['Protein'] == dropProtein)&(dfSubs['Sample']==sampleTop)]
+    accession = re.search('(?<=\|).*(?=\|)',dropProtein)[0]
     sequence = dfproteins.loc[accession,'Sequence']    
     dff = dff.groupby(by=['PTMs','Substitution Position'])['logNormalized'].max()
     dff = dff.reset_index()
     dff['Destination'] = dff['PTMs'].str.extract('->(...)')
     
+    dff2 = dfSubs[(dfSubs['Protein'] == dropProtein)&(dfSubs['Sample']==sampleBot)]  
+    dff2 = dff2.groupby(by=['PTMs','Substitution Position'])['logNormalized'].max()
+    dff2 = dff2.reset_index()
+    dff2['logNormalized'] = -1*dff2['logNormalized']
+    dff2['Destination'] = dff2['PTMs'].str.extract('->(...)')
+    
+    #Make a color mapping dictionary 
+    color_mapping = {}
+    num_new_colors = 0
+    for dest in pd.concat([dff['Destination'],dff2['Destination']]).drop_duplicates():
+            color_mapping[dest] = px.colors.qualitative.Dark24[num_new_colors % len(px.colors.qualitative.D3)]
+            num_new_colors += 1
+
+    #I don't know how to use the dictionary on the go.scatter, so get a list
+    color_codes = []
+    for dest in dff2['Destination']:
+        color_codes.append(color_mapping[dest])
+
     fig = px.scatter(dff, x='Substitution Position', 
                                 y="logNormalized",
                                 color='Destination',
@@ -345,8 +367,17 @@ def updateNotManhattan(dropProtein,dropSample):
                                             'logNormalized':False,
                                             'Substitution Position':False,
                                             'Destination':False},
-                                color_discrete_sequence=px.colors.qualitative.Dark24,
+                                color_discrete_map=color_mapping
                                 )
+    
+    fig.add_trace(go.Scatter(x=dff2['Substitution Position'],
+                          y=dff2['logNormalized'],
+                          mode='markers',
+                          marker=dict(color=color_codes,
+                                      symbol='circle'),
+                          hovertemplate='%{text}',
+                          text=dff2['PTMs'])
+                )
     
     fig.layout.update(showlegend=False)#{'title':'Substitution Destination'})
     fig.update_xaxes(title_text=dropProtein, range=[0,len(sequence)],
@@ -355,10 +386,10 @@ def updateNotManhattan(dropProtein,dropSample):
                      ticktext = [x for x in sequence],
                      tickangle=0
                      )
-    fig.update_yaxes(title_text='Substitution Frequency', range=[-5.5,3.5],
+    fig.update_yaxes(title_text='Substitution Frequency',
                      tickmode = 'array',
-                     tickvals = [x for x in range(-6,4,1)],
-                     ticktext = [str(10**x) for x in range(-6,4,1)]
+                     tickvals = [x for x in range(-12,12,1)],
+                     ticktext = [r'10<sup>-{}</sup>'.format(np.abs(x)) for x in range(-12,12,1)]
                      )
     return fig
 
