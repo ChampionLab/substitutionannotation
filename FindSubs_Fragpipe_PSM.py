@@ -15,7 +15,8 @@ import re
 import datetime
 from tqdm import tqdm
 from substitutionannotation.resources import assets as p
-   
+import dask.dataframe as dd
+import dask.diagnostics
 
 #Use a dictionary which assigns I and L to 'Leu/Ile' to reflect isobaric masses
 dict_123 = {'G': 'Gly',
@@ -59,6 +60,10 @@ def getModaa(row):
         unique_aa = [aa for row in row['MSFragger Localization']
                               for aa in row if aa.islower()]
         unique_aa = [letter.upper() for letter in unique_aa]
+        if not unique_aa:
+            #For odd cases where Fragger has a mod but not a location
+            #Return all aa in the sequence
+            return list(set(row['Modified Peptide'])) 
         return unique_aa
     else:
         return []
@@ -71,8 +76,12 @@ def getPTMs(row):
         return 'NONE','NONE'
     modAAs = row['Modified Residues 3']
 
-
-    dm= float(re.findall('\[(.*?)\]',row['Modified Peptide'])[0])
+    #With current settings for IonQuant to work, MSFragger adds the delta mass to the
+    #calculated peptide mass. The true delta mass from the base peptide is therefore
+    #the sum of the reported delta mass and the reported mass offset
+    #Note, the reported mass offset is NOT always the offset that minimizes the 
+    #reported delta mass... why?
+    dm= float(re.findall('\[(.*?)\]',row['Modified Peptide'])[0]) + row['Delta Mass']
     
     
     
@@ -86,12 +95,11 @@ def getPTMs(row):
         modpos = np.nan
     
     #Set tolerance to 25ppm 
-    atol = row['Calibrated Observed M/Z'] *2.5*10**(-5)
+    atol = row['Calibrated Observed Mass'] *2.5*10**(-5) 
     safebool = True
-    if modAA:
-        modAA = dict_123.get(modAA[0]) #Get 3 letter code of aa
     if modAAs:
-        
+        modAA = dict_123.get(modAA[0]) #Get 3 letter code of aa
+
         #Get filtered DFDM
         try:
             dfdmf = dfdm[modAAs]
