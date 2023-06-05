@@ -15,9 +15,8 @@ To-do list:
 
 import pandas as pd
 import os
-import re
-from tjl.params import tjlassets as p
 import datetime
+from substitutionannotation.resources import assets as sA
 
 #Create list of every possible amino acid substitution
 aminoacids = ['Ala', 'Arg','Asn','Asp','Cys','Glu','Gln','Gly',
@@ -26,17 +25,20 @@ aminoacids = ['Ala', 'Arg','Asn','Asp','Cys','Glu','Gln','Gly',
 dict_renamePos = { 0: 'Sub 1 Position',
                1 : 'Sub 2 Position',
                2 : 'Sub 3 Position',
-               3 : 'Sub 4 Position'
+               3 : 'Sub 4 Position',
+               4 : 'Sub 5 Position'
                }
 dict_renameOri = { 0: 'Sub 1 Origin',
                1 : 'Sub 2 Origin',
                2 : 'Sub 3 Origin',
-               3 : 'Sub 4 Origin'
+               3 : 'Sub 4 Origin',
+               4 : 'Sub 5 Origin',
                }
 dict_renameDest = { 0: 'Sub 1 Destination',
                1 : 'Sub 2 Destination',
                2 : 'Sub 3 Destination',
-               3 : 'Sub 4 Destination'
+               3 : 'Sub 4 Destination',
+                4: 'Sub 5 Destination'
                }
 
 modlist=[]
@@ -51,47 +53,33 @@ now = datetime.datetime.now()
 print(str(now))
 print('Start import')
 
-df = pd.read_csv(os.path.join(p.peaksdir,'spider.psms.csv'))
+df = pd.read_csv(os.path.join(sA.inputdir,'spider.peptides.csv'))
+samples = pd.read_csv(os.path.join(sA.inputdir,'spider.filteredStatistics.csv'))['Sample'].iloc[:-1]
 
-if os.path.isdir(p.peaksout):
-    print('Output directory already exists -- code will overwrite existing files')
-else: 
-    os.mkdir(p.peaksout)
-    print('Created output directory '+p.peaksout)
-    
-try:
-    os.mkdir(os.path.join(p.peaksout,'PublicationFigures'))
-except: pass
+#df['Full Spectrum'] = [str(x) + '-' + y for x, y in zip(df['Scan'], df['Source File'])]
 
-df['Full Spectrum'] = [str(x) + '-' + y for x, y in zip(df['Scan'], df['Source File'])]
+df.loc[:,'PTM'].fillna('NONE',inplace=True)
+#df['Sample'] = df['Source File'].replace(regex='(?=_Slot)(.+)',value='')
+#filenames = df['Source File'].replace(regex='(?=_Slot)(.+)',value='').drop_duplicates()
+#filenames.to_csv(os.path.join(p.peaksout,'filenames.csv'),index=False)
 
-df.loc[:,'PTM'].fillna('Unmodified',inplace=True)
-df['Sample'] = df['Source File'].replace(regex='(?=_Slot)(.+)',value='')
-filenames = df['Source File'].replace(regex='(?=_Slot)(.+)',value='').drop_duplicates()
-filenames.to_csv(os.path.join(p.peaksout,'filenames.csv'),index=False)
 now = datetime.datetime.now()
 print(str(now))
 print('Start filters')
+
 df['Is Sub'] = df['PTM'].str.count('substitution') == 1
-df['Double Sub'] = df['PTM'].str.count('substitution') == 2
+df['Multiple Sub'] = df['PTM'].str.count('substitution') >= 1
 df['Number of Modifications'] = df['PTM'].str.count(';') - df['PTM'].str.count('Carbamidomethylation')
 
-#Filter subs by intensity
-#True for peptides with an intensity
-df['Has Intensity'] = ~df['Intensity'].isnull()
-if (df['Intensity']==0).any():
-    raise Warning ('0 intensity PSMs not filtered')
-df['Intense Sub'] = df['Has Intensity'] & df['Is Sub']
+#Drop peptides without intensity in any sample
+signalcols = df.columns[df.columns.str.contains('Area')]
+nosignal = df.loc[:,signalcols].apply(lambda row: row.isna().all(),axis=1)
+df = df[~nosignal]
 
 """Clarify Base and Mod peptide sequences"""
 now = datetime.datetime.now()
 print(str(now))
 print('Clarify sequences')
-#Saved regex match uses
-#letter B in B(sub X)       .(?=\(sub \w\))
-#letter X in B(sub X)       (?<=\(sub ).
-#match all of B(sub X)      .\(sub \w\)
-#Anything in parenthesis, smallest selection possible    \(.+?\)
 
 #Get substitution origins, destinations, and positions
 dfsubpositions = df['AScore'].str.extractall('(\d+):...->').reset_index(
@@ -99,12 +87,12 @@ dfsubpositions = df['AScore'].str.extractall('(\d+):...->').reset_index(
         columns=dict_renamePos)
 df = pd.concat([df,dfsubpositions],axis=1)
 
-dfsuborigins = df['AScore'].str.extractall('(...)->').replace(p.dict_321
+dfsuborigins = df['AScore'].str.extractall('(...)->').replace(sA.dict_321
         ).reset_index(level='match').pivot(columns ='match', values=0).rename(
         columns=dict_renameOri)
 df = pd.concat([df,dfsuborigins],axis=1)
 
-dfsubdestinations = df['AScore'].str.extractall('->(...)').replace(p.dict_321
+dfsubdestinations = df['AScore'].str.extractall('->(...)').replace(sA.dict_321
         ).reset_index(level='match').pivot(columns ='match', values=0).rename(
         columns=dict_renameDest)
 df = pd.concat([df,dfsubdestinations],axis=1)
@@ -123,11 +111,30 @@ df['Peptide'].replace(regex='\(.+?\)',value='',inplace = True)
 now = datetime.datetime.now()
 print(str(now))
 print('Output Filtered PSMs')
-df.to_csv(os.path.join(p.peaksout,'AllPSMSAndFilters.csv'))
-dffilteredpsm=df[df['Has Intensity'] & df['Is Sub']]
-dffilteredpsm.to_csv(os.path.join(p.peaksout,'Filtered SSP PSM.csv'))
-dffilteredpsm=df[df['Is Sub']]
-dffilteredpsm.to_csv(os.path.join(p.peaksout,'Filtered SSP PSM No Intensity Filter.csv'))
+
+#Rename/reshape df to unify downstream analysis
+
+dict_col_names = {
+    'RT':'Retention',
+    'Length':'Peptide Length',
+    'Source File':'Spectrum',
+    'm/z':'Calibrated Observed M/Z',
+    'Accession':'Protein',
+    'Mass':'Calibrated Observed Mass',
+    'Peptide':'Base Peptide',
+    'Sub Peptide':'Peptide'
+}
+df.to_csv(os.path.join(sA.outputdir,'AllPSMSAndFilters.csv'))
+#Get substitued peptide info
+dfsubs=df[df['Is Sub']]
+
+#Get substitution position in the protein
+
+#Get quantification info
+dfquant = dfsubs[['Protein','Sample','Peptide']]
+dfsubs.to_csv(os.path.join(sA.outputdir,'SSP PSM.csv'))
+
+dffilteredpsm[]
 
 
 """Output Total number of PSMs by mod, total sub PSMs by file"""
@@ -184,32 +191,5 @@ now = datetime.datetime.now()
 print(str(now))
 print('Done')
 
-
-
-#--------------------[]
-
-"""Deprecated
-dfbymod = pd.DataFrame()
-for mod in modlist:
-    dfbymod.loc[mod,'Number of Spectra'] = df.loc[(df['PTM'].str.contains(mod)),u'#Spec'].sum()
-
-dfbymod = dfbymod.sort_values(by=['Number of Spectra'], ascending=False)
-dfbymod.to_csv(os.path.join(p.peaksout,'SubsbyMod.csv'),index=True)
-
-
-#Quantify mod peptide and base peptide
-#Get base peptide sequence out of 'Peptide'
-
-#Replace PEPTIDN(sub B)ISFUN with PEPTIDBISFUN 
-string = re.sub('.\(sub '+amod+'\)?', amod, string)
-
-for seq,ind in zip(df['Peptide'], df.index):
-    df.loc[ind,'Base Peptide']
-    df.loc[ind,'Base Peptide'] = re.sub("[\(\[].*?[\)\]]", "", seq)
-#Find base peak areas
-for indx in dfmodpep.index:
-    dfmodpep.loc[indx,'Base TIC']= dfbasepep.loc[lambda dfbasepep: dfbasepep['Base Sequence'] == dfmodpep.loc[indx,'Base Sequence'], 'Total Ion Current'].max()                         
-dfmodpep['Base TIC'] = dfmodpep['Base TIC'].fillna(0)    
-"""
 #Reset variables
 #%reset -f

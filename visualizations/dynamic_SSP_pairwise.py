@@ -2,7 +2,7 @@
 """
 Created on Thu Oct 20 16:08:53 2022
 A script to create many interactive plotly charts
-Follows MSFraggerVis4
+Must follow FindSubs_xxx.py
 @author: taylo
 """
 
@@ -15,31 +15,40 @@ import plotly.express as px
 import plotly.graph_objects as go
 from dash import Dash, html, dcc, Input, Output
 import os
-from substitutionannotation.resources import assets as p
+from substitutionannotation.resources import assets as sA
 import re
 import scipy.stats as st
 import random
-import upsetplot
-import matplotlib.pyplot as plt
-import seaborn as sns
+
+
+
 #%%
+#Define functions
 def concatenate_lists(series):
     concatenated_list = []
     for lst in series:
         concatenated_list.extend(lst)
     return concatenated_list
 
+def getCV(series):
+    try:
+        result = np.abs(np.std(series)/np.mean(series))
+    except ZeroDivisionError:
+        result = np.nan
+    return result
+
+
 #%%
 #Parse data for plotting
 missingoffset = 1.10
 
-dfSubs = pd.read_csv(os.path.join(p.outputdir,'SSP Quant.csv'))
-dfReplicates = pd.read_csv(os.path.join(p.outputdir,'SSP Quant Tech.csv'))
-dfAnnotate = pd.read_csv(os.path.join(p.outputdir,'SSP PSM.csv'))
+dfSubs = pd.read_csv(os.path.join(sA.outputdir,'SSP Quant.csv'))
+dfReplicates = pd.read_csv(os.path.join(sA.outputdir,'SSP Quant Tech.csv'))
+dfAnnotate = pd.read_csv(os.path.join(sA.outputdir,'SSP PSM.csv'))
 #Subs with intensity, with base peptide intensity and protein intensity
-# in the same sample have already been processed by FindSubs_Pragpipe_PSM.py
+# in the same sample have already been processed by FindSubs_xxx.py
 
-
+#Preparse some data
 dfSubs = dfSubs.merge(dfAnnotate[['Modified Peptide','PTMs','Substitution Position']].drop_duplicates(),on='Modified Peptide',how='left')
 dfReplicates = dfReplicates.merge(dfAnnotate[['Modified Peptide','PTMs']].drop_duplicates(),on='Modified Peptide',how='left')
 samples = dfSubs['Sample'].drop_duplicates().reset_index(drop=True)
@@ -47,6 +56,9 @@ bySample = dfSubs.groupby(by=['Sample'])
 repBySample = dfReplicates.groupby(by=['Sample'])
 bySamplePep = dfSubs.groupby(by=['Sample','Modified Peptide'])
 
+#Determine biological relevance threshold
+CVs = dfReplicates.groupby(by=['Sample','Modified Peptide'])['Intensity'].apply(getCV)
+bioRel = np.quantile(CVs.dropna(),0.95)
 
 #get FASTA and protein sequence info
 fastadir = r"C:\Users\taylo\Documents\Notre Dame\Lab\FASTA\2022-03-26-decoys-contam-UP_2022_03_25_EcoliK12.fasta.fas"
@@ -78,6 +90,7 @@ app = Dash(__name__,suppress_callback_exceptions=True)
 #Plotly app stuff for interactive graphs
 
 app.layout = html.Div([
+    dcc.Dropdown(options = ['logRatio','logNormalized'], value = 'logRatio', id='signaltype'),
     dcc.Tabs(id="tabs", value='tab-1', children=[
         dcc.Tab(label='Ratio by Type', value='tab-1'),
         dcc.Tab(label='Ratio Scatterplot', value='tab-2'),
@@ -98,7 +111,17 @@ def render_content(tab):
                 dcc.Input(id='subfilter',value='Gly', type='text'),
                 html.Br(),
                 dcc.Graph(
-                    id='filtered_freq_violin')
+                    id='filtered_freq_violin'),
+                    html.Br(),
+                dcc.Graph(id='typehex',
+                          style={
+                'width': 'auto',
+                'height': 'auto',
+                'max-width': '90vw',  # Set the maximum width of the plot area
+                'max-height': '90vh',  # Set the maximum height of the plot area
+                'padding': '10px',  # Add padding around the plot area
+                'box-sizing': 'border-box',  # Include padding in the dimensions
+            })
             ], style={'padding': 5, 'flex': 1})
         ])
     elif tab == 'tab-2':
@@ -156,14 +179,16 @@ def render_content(tab):
 #%%
 @app.callback(
     Output(component_id='filtered_freq_violin', component_property='figure'),
+    Output(component_id='typehex',component_property= 'figure'),
     Input(component_id='subfilter', component_property='value'),
-
+    Input(component_id ='signaltype', component_property= 'value')
 )
-def update_freq_violin(subfilter):
+def update_freq_violin(subfilter,signaltype):
     #Parse proper substitution type
     dff = dfSubs[dfSubs['PTMs'].str.contains(subfilter)]
     dff = dff.groupby(by='Sample')
 
+    # Scale the size of each violin plot based on the number of peptides
     # Create a list of scales for each sample based on the number of peptides
     scales = pd.Series(dtype='float64')
     for sample in samples:
@@ -177,20 +202,30 @@ def update_freq_violin(subfilter):
     fig = go.Figure()
     for sample in samples:
         try:
-            dfplot = dff.get_group(sample)[['logRatio','PTMs']].dropna(subset='logRatio')
+            dfplot = dff.get_group(sample)[[signaltype,'PTMs']].dropna(subset=signaltype)
         except:     #Handle error when a sample has no peptides that match the filter
             continue
         fig.add_trace(
         go.Violin(x0=str(sample),
-                    y=dfplot['logRatio'],
+                    y=dfplot[signaltype],
                     box_visible=True,points='all',
                     hoverinfo='text',text=dfplot['PTMs'],
                     scalemode='count', scalegroup=1,
                   showlegend=False)
                 )
-    fig.update_yaxes(title_text='log10 Ratio')
+    fig.update_yaxes(title_text=signaltype)
     fig.update_layout(violingap=0,showlegend=False,title=subfilter + ' Substitutions')
-    return fig
+
+    """ Rectangle density heatmap
+    fig2 = px.density_heatmap(dfSubs[dfSubs['PTMs'].str.contains(subfilter)], x='logIntensity',
+                               y=signaltype, nbinsx=30, nbinsy=30, color_continuous_scale='Blues')
+    """
+    #Traditional scatter
+    fig2 = px.scatter(data_frame= dfSubs[dfSubs['PTMs'].str.contains(subfilter)], x="logIntensity",
+                       y=signaltype)
+    fig2.update_traces(marker=dict(size=5))
+    
+    return fig,fig2
 
 
 #%%
@@ -198,15 +233,17 @@ def update_freq_violin(subfilter):
     Output('freq_scatter','figure'),
     Output('ttestOutput','children'),
     Input('freq_scatter_x','value'),
-    Input('freq_scatter_y','value')
+    Input('freq_scatter_y','value'),
+    Input(component_id ='signaltype', component_property= 'value')
+
 )
-def update_frequency_scatter(freq_scatter_x,freq_scatter_y):
+def update_frequency_scatter(freq_scatter_x,freq_scatter_y,signaltype):
     
-    xdata = bySample.get_group(freq_scatter_x).groupby(by='Modified Peptide')[['Protein','logNormalized']].max().dropna(subset='logNormalized')
-    xSignal = str(freq_scatter_x) + ' logNormalized'
-    ySignal = str(freq_scatter_y) + 'logNormalized'
+    xdata = bySample.get_group(freq_scatter_x).groupby(by='Modified Peptide')[['Protein',signaltype]].max().dropna(subset=signaltype)
+    xSignal = str(freq_scatter_x) + ' ' + signaltype
+    ySignal = str(freq_scatter_y) + ' '+ signaltype
     xdata.columns = ['Protein',xSignal]
-    ydata = bySample.get_group(freq_scatter_y).groupby(by='Modified Peptide')[['Protein','logNormalized']].max().dropna(subset='logNormalized')
+    ydata = bySample.get_group(freq_scatter_y).groupby(by='Modified Peptide')[['Protein',signaltype]].max().dropna(subset=signaltype)
     ydata.columns = ['Protein',ySignal]
     dfplot = pd.merge(xdata,ydata,left_index=True,right_index=True,how='outer') 
     dfplot['Protein'] = dfplot['Protein_x'].fillna(dfplot['Protein_y'])
@@ -220,6 +257,13 @@ def update_frequency_scatter(freq_scatter_x,freq_scatter_y):
     notMissing = ~(missingInX | missingInY)
     dfplot.loc[missingInX,xSignal] = dfplot[xSignal].min()*missingoffset
     dfplot.loc[missingInY,ySignal] = dfplot[ySignal].min()*missingoffset
+
+    #Min/max axis values
+    xmin = dfplot.loc[notMissing,xSignal].min()
+    ymin = dfplot.loc[notMissing,ySignal].min()
+    xmax = dfplot.loc[notMissing,xSignal].max()
+    ymax = dfplot.loc[notMissing,ySignal].max()
+
     #Compute p value of shared data, that x < y
     (t,pval) = st.ttest_rel(dfplot.loc[notMissing,xSignal],
                          dfplot.loc[notMissing,ySignal],
@@ -247,7 +291,7 @@ def update_frequency_scatter(freq_scatter_x,freq_scatter_y):
                     ),
                     row=2,col=1)
 
-    fig.add_trace(go.Scatter(x=[-15,-3],y=[-15,-3],
+    fig.add_trace(go.Scatter(x=[xmin,xmax],y=[ymin,ymax],
                              mode='lines',marker_color='rgba(130,130,130)',
                             showlegend=False,
                             line=dict(width=1),
@@ -332,20 +376,21 @@ def update_frequency_scatter(freq_scatter_x,freq_scatter_y):
     Output(component_id='notManhattan', component_property='figure'),
     Input(component_id='dropProtein', component_property='value'),
     Input(component_id='freq_prot_top', component_property='value'),
-    Input(component_id='freq_prot_bottom', component_property='value')
+    Input(component_id='freq_prot_bottom', component_property='value'),
+    Input(component_id='signaltype',component_property='value')
 )
-def updateNotManhattan(dropProtein,sampleTop,sampleBot):
+def updateNotManhattan(dropProtein,sampleTop,sampleBot,signaltype):
     dff = dfSubs[(dfSubs['Protein'] == dropProtein)&(dfSubs['Sample']==sampleTop)]
     accession = re.search('(?<=\|).*(?=\|)',dropProtein)[0]
     sequence = dfproteins.loc[accession,'Sequence']    
-    dff = dff.groupby(by=['PTMs','Substitution Position'])['logNormalized'].max()
+    dff = dff.groupby(by=['PTMs','Substitution Position'])[signaltype].max()
     dff = dff.reset_index()
     dff['Destination'] = dff['PTMs'].str.extract('->(...)')
     
     dff2 = dfSubs[(dfSubs['Protein'] == dropProtein)&(dfSubs['Sample']==sampleBot)]  
-    dff2 = dff2.groupby(by=['PTMs','Substitution Position'])['logNormalized'].max()
+    dff2 = dff2.groupby(by=['PTMs','Substitution Position'])[signaltype].max()
     dff2 = dff2.reset_index()
-    dff2['logNormalized'] = -1*dff2['logNormalized']
+    dff2[signaltype] = -1*dff2[signaltype]
     dff2['Destination'] = dff2['PTMs'].str.extract('->(...)')
     
     #Make a color mapping dictionary 
@@ -361,17 +406,17 @@ def updateNotManhattan(dropProtein,sampleTop,sampleBot):
         color_codes.append(color_mapping[dest])
 
     fig = px.scatter(dff, x='Substitution Position', 
-                                y="logNormalized",
+                                y=signaltype,
                                 color='Destination',
                                 hover_data={'PTMs':True,
-                                            'logNormalized':False,
+                                            signaltype:False,
                                             'Substitution Position':False,
                                             'Destination':False},
                                 color_discrete_map=color_mapping
                                 )
     
     fig.add_trace(go.Scatter(x=dff2['Substitution Position'],
-                          y=dff2['logNormalized'],
+                          y=dff2[signaltype],
                           mode='markers',
                           marker=dict(color=color_codes,
                                       symbol='circle'),
@@ -401,12 +446,13 @@ def updateNotManhattan(dropProtein,sampleTop,sampleBot):
     Input('volcanoType','value'),
     Input('volcanoNumerator','value'),
     Input('volcanoDenominator','value'),
+    Input('signaltype','value')
     )
-def updateVolcanoPlot(volcanoType,volcanoNumerator,volcanoDenominator):
+def updateVolcanoPlot(volcanoType,volcanoNumerator,volcanoDenominator,signaltype):
     #Parse relevant data
     dff = pd.concat([repBySample.get_group(name) for name in [volcanoNumerator,volcanoDenominator]])
-    bySampleMetric = dff.groupby(by=['Sample',volcanoType])['Normalized'].apply(list)
-    bySampleMetric = bySampleMetric.reset_index().pivot_table(columns='Sample',index=volcanoType,values='Normalized',
+    bySampleMetric = dff.groupby(by=['Sample',volcanoType])[signaltype].apply(list)
+    bySampleMetric = bySampleMetric.reset_index().pivot_table(columns='Sample',index=volcanoType,values=signaltype,
                                                      aggfunc=lambda x:x)
     #Find 0/Na in numerator or denominator for offsetting in plot
     maskNaNumerator = bySampleMetric[volcanoNumerator].isna()
@@ -431,18 +477,27 @@ def updateVolcanoPlot(volcanoType,volcanoNumerator,volcanoDenominator):
     bySampleMetric['Crit Value'] = (bySampleMetric['P Rank']/ntests)*alpha
     maskBen = bySampleMetric['P'] <= bySampleMetric['Crit Value']
     benpv= bySampleMetric[maskBen]['P'].max()
+    #Create mask for significant values
     maskSignificant = bySampleMetric['P'] <= benpv
-    maskSignificant = (maskSignificant & (np.abs(bySampleMetric['FC']) > 1))
+    #Mask significant values AND biologically relevent values
+    bioRelUpper = np.log2(1+bioRel)
+
+    #Variance/error symmetric in linear space is not symmetric in log space
+    if 1-bioRel <= 0:    #Handle variance >= mean
+        maskSignificant = (maskSignificant & (bySampleMetric['FC'] > bioRelUpper))
+    if 1-bioRel > 0:    #Handle variance <= mean
+        bioRelLower = np.log2(1-bioRel)
+        maskBioRel = (bySampleMetric['FC'] > bioRelUpper) | (bySampleMetric['FC'] < bioRelLower)
+        maskSignificant = (maskSignificant & maskBioRel)
+
+
     bySampleMetric['logP'] = np.log10(bySampleMetric['P'])*-1
     #Get upper/lower bounds of data for plotting unique subset of data
     sigmin = bySampleMetric['logP'].min()
     sigmax = bySampleMetric['logP'].max()
-    fcmin = bySampleMetric['FC'].min()*missingoffset
-    if fcmin > -1:
-        fcmin = -1.1    #Force missing values to be outside generic +/- 1 fc cutoff
+    fcmin = bySampleMetric['FC'].min()*missingoffset   
     fcmax = bySampleMetric['FC'].max()*missingoffset
-    if fcmax < 1:
-        fcmax = 1.1     #Force missing values to be outside generic +/- 1 fc cutoff
+
     fig = go.Figure()
     #Add significantly enriched values
     fig.add_trace(go.Scatter(x=bySampleMetric.loc[maskSignificant & maskBoth,'FC'],
@@ -485,14 +540,15 @@ def updateVolcanoPlot(volcanoType,volcanoNumerator,volcanoDenominator):
                             name='Significance line')
                   )
     #FC lower threshold
-    fig.add_trace(go.Scatter(x=[-1,-1],y=[0,sigmax*1.2],
-                             mode='lines',marker_color='rgba(130,130,130)',
-                            showlegend=False,
-                            line=dict(width=1,dash='dot'),
-                            name='FC Neg line')
-                  )
+    if 1-bioRel > 0:
+        fig.add_trace(go.Scatter(x=[np.log2(1-bioRel),np.log2(1-bioRel)],y=[0,sigmax*1.2],
+                                mode='lines',marker_color='rgba(130,130,130)',
+                                showlegend=False,
+                                line=dict(width=1,dash='dot'),
+                                name='FC Neg line')
+                    )
     #FC upper threshold
-    fig.add_trace(go.Scatter(x=[1,1],y=[0,sigmax*1.2],
+    fig.add_trace(go.Scatter(x=[np.log2(1+bioRel),np.log2(1+bioRel)],y=[0,sigmax*1.2],
                              mode='lines',marker_color='rgba(130,130,130)',
                             showlegend=False,
                             line=dict(width=1,dash='dot'),
@@ -513,10 +569,10 @@ def updateVolcanoPlot(volcanoType,volcanoNumerator,volcanoDenominator):
                             name='Missing lower fence')
                   )
     #Text annotations
-    fig.add_annotation(text="Higher "+'Normalized'+" in "+ str(volcanoNumerator),
+    fig.add_annotation(text="Higher "+'Ratio'+" in "+ str(volcanoNumerator),
                 xref="paper", yref="paper",
                 x=.85, y=-0.12,showarrow=False)
-    fig.add_annotation(text="Higher "+'Normalized'+" in "+ str(volcanoDenominator),
+    fig.add_annotation(text="Higher "+'Ratio'+" in "+ str(volcanoDenominator),
                 xref="paper", yref="paper",
                 x=.15, y=-0.12,showarrow=False)
     
@@ -533,4 +589,4 @@ def updateVolcanoPlot(volcanoType,volcanoNumerator,volcanoDenominator):
 
 #%%
 if __name__ == '__main__':
-    app.run_server(debug=True)
+    app.run(debug=True)

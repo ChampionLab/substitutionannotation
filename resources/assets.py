@@ -21,14 +21,14 @@ with open(file_path, "r+") as f:
         f.write(inputdir)
         
 
-outputdir= os.path.join(inputdir,'substitutionannotation_output')
+outputdir= os.path.join(inputdir,'substitutionAnnotation_output')
 if not os.path.exists(outputdir):
     try:
         os.mkdir(outputdir)
     except:
         inputdir = input(inputdir +' is not a valid directory. Please try again.')
     try:
-        os.mkdir(os.path.join(inputdir,'substitutionannotation output'))
+        os.mkdir(os.path.join(inputdir,'substitutionAnnotation output'))
     except:
         raise Exception('Cannot make that directory.')
 
@@ -119,6 +119,8 @@ aminoacids = ['Ala', 'Arg','Asn','Asp','Cys','Glu','Gln','Gly',
 def changeDir(newdir):
     with open(file_path, "w") as f:
         f.write(newdir)
+        inputdir = newdir
+        outputdir = os.path.join(newdir,'substitutuionAnnotation_output')
 
 def clearDir():
     """Clears the .txt file used to store the working data directoty"""
