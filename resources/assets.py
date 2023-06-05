@@ -21,12 +21,17 @@ with open(file_path, "r+") as f:
         f.write(inputdir)
         
 
-outputdir= os.path.join(inputdir,'substitutionannotation output')
+outputdir= os.path.join(inputdir,'substitutionannotation_output')
 if not os.path.exists(outputdir):
     try:
         os.mkdir(outputdir)
     except:
         inputdir = input(inputdir +' is not a valid directory. Please try again.')
+    try:
+        os.mkdir(os.path.join(inputdir,'substitutionannotation output'))
+    except:
+        raise Exception('Cannot make that directory.')
+
 
 #Commonly used lists
 
