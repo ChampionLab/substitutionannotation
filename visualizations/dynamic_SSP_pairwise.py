@@ -7,7 +7,7 @@ Must follow FindSubs_xxx.py
 """
 
 #%%
-#Try to make a plotly plot
+#Import packages
 import pandas as pd
 import numpy as np
 import plotly
@@ -55,10 +55,10 @@ samples = dfSubs['Sample'].drop_duplicates().reset_index(drop=True)
 bySample = dfSubs.groupby(by=['Sample'])
 repBySample = dfReplicates.groupby(by=['Sample'])
 bySamplePep = dfSubs.groupby(by=['Sample','Modified Peptide'])
-
+quantiles = pd.read_csv(os.path.join(sA.outputdir,'CV95 Quantiles.csv'))
 #Determine biological relevance threshold
 CVs = dfReplicates.groupby(by=['Sample','Modified Peptide'])['Intensity'].apply(getCV)
-bioRel = np.quantile(CVs.dropna(),0.95)
+bioRel = quantiles['logRatio CV'].item()
 
 #get FASTA and protein sequence info
 fastadir = r"C:\Users\taylo\Documents\Notre Dame\Lab\FASTA\2022-03-26-decoys-contam-UP_2022_03_25_EcoliK12.fasta.fas"
@@ -79,6 +79,10 @@ while True:
 
 eftu = dfSubs.loc[dfSubs['Protein'].str.contains('EFTU'),'Protein'].max()
 
+#Check/make directory for outputs
+output = os.path.join(sA.outputdir,'dynamicVisualizations')
+if not os.path.exists(output):
+    os.mkdir(output)
 
 #%%
 #Start Dash
@@ -480,15 +484,9 @@ def updateVolcanoPlot(volcanoType,volcanoNumerator,volcanoDenominator,signaltype
     #Create mask for significant values
     maskSignificant = bySampleMetric['P'] <= benpv
     #Mask significant values AND biologically relevent values
-    bioRelUpper = np.log2(1+bioRel)
 
-    #Variance/error symmetric in linear space is not symmetric in log space
-    if 1-bioRel <= 0:    #Handle variance >= mean
-        maskSignificant = (maskSignificant & (bySampleMetric['FC'] > bioRelUpper))
-    if 1-bioRel > 0:    #Handle variance <= mean
-        bioRelLower = np.log2(1-bioRel)
-        maskBioRel = (bySampleMetric['FC'] > bioRelUpper) | (bySampleMetric['FC'] < bioRelLower)
-        maskSignificant = (maskSignificant & maskBioRel)
+    maskBioRel = (bySampleMetric['FC'] > bioRel) | (bySampleMetric['FC'] < -1*bioRel)
+    maskSignificant = (maskSignificant & maskBioRel)
 
 
     bySampleMetric['logP'] = np.log10(bySampleMetric['P'])*-1
@@ -502,23 +500,25 @@ def updateVolcanoPlot(volcanoType,volcanoNumerator,volcanoDenominator,signaltype
     #Add significantly enriched values
     fig.add_trace(go.Scatter(x=bySampleMetric.loc[maskSignificant & maskBoth,'FC'],
                              y=bySampleMetric.loc[maskSignificant & maskBoth,'logP'],
-                             mode='markers',marker_color='rgba(255,0,0)',
+                             mode='markers',marker_color='rgba(255,0,0)', marker = dict(size=6),
                             name='Significant',
                             hoverinfo='text',
                             text=bySampleMetric.loc[maskSignificant].index)
                   )
     #Add values only in one sample
     #random x is to add jitter
-    fig.add_trace(go.Scatter(x=[fcmin*(1+random.randrange(1,10)/100) for x in range(len(bySampleMetric.loc[maskNaNumerator]))],
+    if maskNaNumerator.any():
+        fig.add_trace(go.Scatter(x=[fcmin*(1+random.randrange(1,10)/100) for x in range(len(bySampleMetric.loc[maskNaNumerator]))],
                              y=np.arange(sigmin,sigmax,sigmax/len(bySampleMetric.loc[maskNaNumerator])),
-                             mode='markers',marker_color='rgba(255,0,0)',
+                             mode='markers',marker_color='mediumpurple', marker = dict(size=3),
                             name='Unique to ' + str(volcanoDenominator),
                             hoverinfo='text',
                             text=bySampleMetric.loc[maskNaNumerator].index)
                   )
-    fig.add_trace(go.Scatter(x=[fcmax*(1+random.randrange(1,10)/100) for x in range(len(bySampleMetric.loc[maskNaDenominator]))],
+    if maskNaDenominator.any():
+        fig.add_trace(go.Scatter(x=[fcmax*(1+random.randrange(1,10)/100) for x in range(len(bySampleMetric.loc[maskNaDenominator]))],
                              y=np.arange(sigmin,sigmax,sigmax/len(bySampleMetric.loc[maskNaDenominator])),
-                             mode='markers',marker_color='rgba(255,0,0)',
+                             mode='markers',marker_color='orange', marker = dict(size=3),
                             name='Unique to '+str(volcanoNumerator),
                             hoverinfo='text',
                             text=bySampleMetric.loc[maskNaDenominator].index)
@@ -526,7 +526,7 @@ def updateVolcanoPlot(volcanoType,volcanoNumerator,volcanoDenominator,signaltype
     #Add insignificant values
     fig.add_trace(go.Scatter(x=bySampleMetric.loc[~maskSignificant & maskBoth,'FC'],
                              y=bySampleMetric.loc[~maskSignificant & maskBoth,'logP'],
-                             mode='markers',marker_color='rgba(255,0,0)',
+                             mode='markers',marker_color='grey', marker = dict(size=4),
                             name='Insignificant',
                             hoverinfo='text',
                             text=bySampleMetric.index)
@@ -541,14 +541,14 @@ def updateVolcanoPlot(volcanoType,volcanoNumerator,volcanoDenominator,signaltype
                   )
     #FC lower threshold
     if 1-bioRel > 0:
-        fig.add_trace(go.Scatter(x=[np.log2(1-bioRel),np.log2(1-bioRel)],y=[0,sigmax*1.2],
+        fig.add_trace(go.Scatter(x=[-bioRel,-bioRel],y=[0,sigmax*1.2],
                                 mode='lines',marker_color='rgba(130,130,130)',
                                 showlegend=False,
                                 line=dict(width=1,dash='dot'),
                                 name='FC Neg line')
                     )
     #FC upper threshold
-    fig.add_trace(go.Scatter(x=[np.log2(1+bioRel),np.log2(1+bioRel)],y=[0,sigmax*1.2],
+    fig.add_trace(go.Scatter(x=[bioRel,bioRel],y=[0,sigmax*1.2],
                              mode='lines',marker_color='rgba(130,130,130)',
                             showlegend=False,
                             line=dict(width=1,dash='dot'),
@@ -584,7 +584,15 @@ def updateVolcanoPlot(volcanoType,volcanoNumerator,volcanoDenominator,signaltype
                      tickvals = [x for x in range(0,round(sigmax)+1)],
                      ticktext = [str(10**-x) for x in range(0,round(sigmax)+1)]
                      )
-    #dit
+    
+    #Output significant, unique data
+    filestr = str('VolcanoSignificant'+signaltype+volcanoNumerator+'v'+volcanoDenominator+'.csv')
+    outputcsv = os.path.join(sA.outputdir,'dynamicVisualizations',filestr)
+
+    if os.path.exists(outputcsv):#No need to remake the output every time the app refreshes
+        pass
+    else:
+        bySampleMetric.loc[maskSignificant & maskBoth].to_csv(outputcsv)
     return fig
 
 #%%

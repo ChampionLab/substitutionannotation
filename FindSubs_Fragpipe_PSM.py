@@ -85,7 +85,9 @@ def getPTMs(row):
     #the sum of the reported delta mass and the reported mass offset
     #Note, the reported mass offset is NOT always the offset that minimizes the 
     #reported delta mass... why?
-    dm= float(re.findall('\[(.*?)\]',row['Modified Peptide'])[0]) + row['Delta Mass']
+    dm= row['Delta Mass'] + row['Mass Offset']
+
+    #old but bad dm= float(re.findall('\[(.*?)\]',row['Modified Peptide'])[0]) + float(row['Mass Offset'])
     
     
     
@@ -200,7 +202,15 @@ def ExpIL(dfin,sequencecolumn):
     df = df.explode(sequencecolumn)
     return df
 
-
+#%%
+def getCV(ser):
+        if len(ser)<=1:
+            return np.nan
+        try:
+            result = np.std(ser)/np.mean(ser)
+        except ZeroDivisionError: 
+            result = np.nan
+        return result
 #%%
 #Inputs
 dfdm = pd.read_csv(r'C:\Users\taylo\anaconda3\Lib\tjl\params\dmMatrix.csv',index_col=0).astype(float)
@@ -229,7 +239,7 @@ fileSample = fileSample.astype(str)
 fileSample['Raw File'] = fileSample['Raw File'].str.replace('\.raw|\.d','',regex=True)
 fileSample = fileSample.set_index('Raw File')
 
-columns = ['Spectrum','Peptide','Modified Peptide','Calibrated Observed Mass',
+columns = ['Spectrum','Peptide','Modified Peptide','Delta Mass','Calibrated Observed Mass',
            'Intensity','Peptide Length','Assigned Modifications','Protein',
            'Hyperscore','PeptideProphet Probability','Retention',
            'Calibrated Observed M/Z','Number of Missed Cleavages']
@@ -254,13 +264,19 @@ fileSample.index = fileSample.index.str.replace(r'SALTY3.5_','SALTY3_5_',regex=T
 
 #Replace Modified Peptide localization score [###] with delta mass 
 df['Assigned Modifications'] = df['Assigned Modifications'].str.replace('C\(57.021\d\)','',regex=True) #Removes fixed carbamidomethyl annotations
-df['Delta Mass'] = df['Assigned Modifications'].str.extract('\((.*?)\)').astype(float)
+df['Mass Offset'] = df['Assigned Modifications'].str.extract('\((.*?)\)').astype(float)
+
+#Resolve the odd case where a PTM is assigned a mass offset of 57.021 at a cysteine
+#Note the mass offset is applied after the fixed carbamidomethyl modification, these are not substitutions
+doubleCysMask = (~df['Assigned Modifications'].isna() & df['Mass Offset'].isna())
+df.loc[doubleCysMask,'Modified Peptide'] = df.loc[doubleCysMask,'Modified Peptide'].str.replace('\[.*\]','',regex=True)
+
 df['Assigned Modifications'].fillna('NONE',inplace=True)
 df['Modified Peptide'].fillna('NONE',inplace=True)
-df['Delta Mass'].fillna('NONE',inplace=True)
+df['Mass Offset'].fillna('NONE',inplace=True)
 df['MSFragger Localization'].fillna('NONE',inplace=True)
 
-df['Modified Peptide'] = df.apply(lambda row: re.sub('\[(.*?)\]','['+str(row['Delta Mass'])+']',
+df['Modified Peptide'] = df.apply(lambda row: re.sub('\[(.*?)\]','['+str(row['Mass Offset'])+']',
                                     row['Modified Peptide']), axis=1)
 
 
@@ -286,7 +302,7 @@ def progressFindPTM(row):
 progress_bar = tqdm(total=len(df.index))
 
 # Parallel processing using ThreadPoolExecutor
-with ThreadPoolExecutor(max_workers=4) as executor:
+with ThreadPoolExecutor(max_workers=3) as executor:
     # Submit tasks for each row
     futures = [executor.submit(progressFindPTM, row) for _, row in df.iterrows()]
 
@@ -304,12 +320,7 @@ df[['PTMs', 'All Possible Substitutions']] = pd.DataFrame([result for _, result 
 
 # Close the progress bar
 progress_bar.close()
-"""
-progress_bar = tqdm(total=len(df.index))
-#Get PTMs with best guess OR ambiguous MSFragger localization
-df[['PTMs','All Possible Substitutions']] = df.apply(lambda x:(getPTMs(x),progress_bar.update(1))[0],
-                                                axis=1,result_type='expand')
-"""
+
 
 df.loc[:,'PTMs'] = df['PTMs'].fillna('NONE')
 
@@ -360,16 +371,16 @@ dfsubs['Substitution Position'] =  dfsubs['Modified Peptide'].apply(
     lambda x:re.search('.\[',x).start()) + dfsubs['Protein Start']
 
 
-#Aggregate PSMs->Modified Sequences, by file, taking the max intensity
+#Aggregate PSMs->Modified Sequences, by sample, taking the max intensity
 dfintensity = dfsubs.groupby(by=['Sample','Modified Peptide'])['Intensity'].max().to_frame()
 dfintensity = dfintensity.merge(dfsubs.groupby(by=['Sample','Modified Peptide'])[['Peptide','Protein']].max(),
                                 left_index=True,right_index=True)
 dfintensity = dfintensity.reset_index()
-#Same for tech rep level analysis
-dftech = dfsubs.groupby(by=['Sample','Replicate','Modified Peptide'])['Intensity'].max().to_frame()
-dftech = dftech.merge(dfsubs.groupby(by=['Sample','Replicate','Modified Peptide'])[['Peptide','Protein']].max(),
+#Same for replicate level analysis
+dfReplicates = dfsubs.groupby(by=['Sample','Replicate','Modified Peptide'])['Intensity'].max().to_frame()
+dfReplicates = dfReplicates.merge(dfsubs.groupby(by=['Sample','Replicate','Modified Peptide'])[['Peptide','Protein']].max(),
                                 left_index=True,right_index=True)
-dftech = dftech.reset_index()
+dfReplicates = dfReplicates.reset_index()
 
 #Aggregate PSMs->Modified Sequences for base peptides
 dfbase = df[df['Is Base']]
@@ -383,25 +394,40 @@ dfintensity['Base Intensity'] = dfintensity.apply(GetBaseBy,axis=1)
 #Set common axis for dfintensity
 
 dfintensity = dfintensity.set_index(['Protein','Sample'])
-#Get protein quant
+#Get protein quant from intensity, not MaxLFQ Intensity
 dfprot = pd.read_csv(os.path.join(sA.inputdir,'combined_protein.tsv'),sep='\t')
 protintcols = dfprot.columns[dfprot.columns.str.contains('Intensity')]
-protintcols = ['Protein'] + protintcols[~protintcols.str.contains('Max')].to_list() 
+protintcols = ['Protein'] + protintcols[~protintcols.str.contains('Max|Unique|Total',regex=True)].to_list() 
 dfprot = dfprot[protintcols].rename(columns=lambda x: x.replace(' Intensity', ''))
 #Reshape and rename 
 dfprot = dfprot.set_index('Protein').stack()
 dfprot.name = 'Protein Intensity'
 protbySample = dfprot.reset_index()
 protbySample.columns = ['Protein','File','Protein Intensity']
+
+
 protbySample['Sample'] = protbySample['File'].str.extract('(.*?)_')
+protbySample['Replicate'] = protbySample['File'].str.extract('_(\d*)')
+#Handle mismatch of data run on older versions of fragger without fragpipe manifest,
+#or more generally when 'sample' was set to file name but here I redefine the samples
+#This probably only applies to my old stuff
+if not protbySample['Sample'].isin(fileSample['Sample']).any(): 
+    protbySample['Sample'] = protbySample.apply(lambda row: fileSample.loc[fileSample.index==row['File'],'Sample'].values.item(),axis=1)
+    protbySample['Replicate'] = protbySample.apply(lambda row: fileSample.loc[fileSample.index==row['File'],'Replicate'].values.item(),axis=1)
+
+#Get protein CVs
+protCV = protbySample.groupby(by=['Sample','Protein'])['Protein Intensity'].apply(getCV)
+protCV = protCV.reset_index().rename(columns={'Protein Intensity':'Protein CV'})
+
 protbySample = protbySample.groupby(by=['Protein','Sample'])['Protein Intensity'].max()
 dfprot.index = dfprot.index.set_names(['Protein', 'Sample'])
+
 dfintensity = dfintensity.merge(protbySample, how='left',left_index=True,right_index=True)
-dftech = dftech.merge(dfintensity[['Base Intensity','Protein Intensity']],
+dfReplicates = dfReplicates.merge(dfintensity[['Base Intensity','Protein Intensity']],
                       how='left',left_on=['Protein','Sample'],right_index=True)
 dfintensity = dfintensity.reset_index()
 dfintensity = dfintensity[~dfintensity['Protein'].str.contains('cont|rev_')]
-dftech = dftech[~dftech['Protein'].str.contains('cont|rev_')]
+dfReplicates = dfReplicates[~dfReplicates['Protein'].str.contains('cont|rev_')]
 #Get normalized values
 
 dfintensity['logIntensity'] = np.log10(dfintensity['Intensity'].replace(0,np.nan))
@@ -413,24 +439,60 @@ dfintensity['logRatio'] = np.log10(dfintensity['Ratio'].replace(0,np.nan))
 dfintensity['Normalized'] = dfintensity['Intensity']/(dfintensity['Protein Intensity'])
 dfintensity['logNormalized'] = np.log10(dfintensity['Normalized'].replace([0,np.inf,-np.inf],np.nan))
 
-dftech['logIntensity'] = np.log10(dftech['Intensity'].replace(0,np.nan))
-dftech['Fraction'] = dftech['Intensity']/(
-    dftech['Base Intensity'] + dftech['Intensity'])
-dftech['logFraction'] = np.log10(dftech['Fraction'].replace(0,np.nan))
-dftech['Ratio'] = dftech['Intensity']/(dftech['Base Intensity'])
-dftech['logRatio'] = np.log10(dftech['Ratio'].replace(0,np.nan))
-dftech['Normalized'] = dftech['Intensity']/(dftech['Protein Intensity'])
-dftech['logNormalized'] = np.log10(dftech['Normalized'].replace([0,np.inf,-np.inf],np.nan))
+dfReplicates['logIntensity'] = np.log10(dfReplicates['Intensity'].replace(0,np.nan))
+dfReplicates['Fraction'] = dfReplicates['Intensity']/(
+    dfReplicates['Base Intensity'] + dfReplicates['Intensity'])
+dfReplicates['logFraction'] = np.log10(dfReplicates['Fraction'].replace(0,np.nan))
+dfReplicates['Ratio'] = dfReplicates['Intensity']/(dfReplicates['Base Intensity'])
+dfReplicates['logRatio'] = np.log10(dfReplicates['Ratio'].replace(0,np.nan))
+dfReplicates['Normalized'] = dfReplicates['Intensity']/(dfReplicates['Protein Intensity'])
+dfReplicates['logNormalized'] = np.log10(dfReplicates['Normalized'].replace([0,np.inf,-np.inf],np.nan))
 
-dfreproducability = dftech.groupby(by=['Sample','Modified Peptide'])[['logFraction','logRatio','logNormalized']].apply(
-    lambda x: np.abs(np.std(x)/np.mean(x))*100)
+#Calculate precision in quantification
+dfCV = dfReplicates.groupby(by=['Sample','Modified Peptide'])[['Peptide','Protein',]].max()
+
+#Get Substitution CV
+dfCV['Substitution CV'] = dfReplicates.groupby(by=['Sample','Modified Peptide'])['Intensity'].apply(lambda x: getCV(x))
+dfCV = dfCV.reset_index()
+
+"""
+#Fill nan CVs with average CV for same peptide in other samples
+subAverageCVs = dfCV.groupby('Modified Peptide')['Substitution CV'].transform('mean')
+dfCV['Substitution CV'] = dfCV['Substitution CV'].fillna(subAverageCVs)"""
+
+#Get Cognate CVs
+#Get peptide abundance as max PSM abundance per replicate
+dfcognateCV = dfbase.groupby(by=['Sample','Peptide','Replicate'])['Intensity'].max()
+dfcognateCV = dfcognateCV.reset_index().groupby(by=['Sample','Peptide'])['Intensity'].apply(lambda x: getCV(x))
+dfcognateCV = dfcognateCV.reset_index().rename(columns={'Intensity':'Cognate CV'})
+"""
+#Fill nan CVs with average CV for same peptide in other samples
+cognateAverageCVs = dfcognateCV.groupby('Peptide')['Cognate CV'].transform('mean')
+dfcognateCV = dfcognateCV.fillna(cognateAverageCVs)"""
+
+#Bring Sub, Cognate, and Protein CVs together
+dfCV = dfCV.merge(dfcognateCV,on=['Peptide','Sample'],how='left')
+dfCV = dfCV.merge(protCV,how='left',on=['Protein','Sample'])
+dfCV['Ratio CV'] = np.sqrt(dfCV['Substitution CV']**2 + dfCV['Cognate CV']**2)
+dfCV['Normalized CV'] = np.sqrt(dfCV['Substitution CV']**2 + dfCV['Protein CV']**2)
+dfCV['logRatio CV'] = 0.434*dfCV['Ratio CV']
+CVcols = ['Substitution CV','Cognate CV','Protein CV','Ratio CV','logRatio CV','Normalized CV']
+
+quantiles = pd.DataFrame(columns = CVcols)
+for col in CVcols:
+    quantiles.loc[0,col] = np.quantile(dfCV[col].dropna(),.95)
+
+dfintensity = dfintensity.merge(dfCV,how='left',on=['Sample','Modified Peptide'],
+                                suffixes=('', '_DROP')).filter(regex='^(?!.*_DROP)')
+
 #%%
 #Create df for filtered only Ions, make general report
 print('Writing tables...')
 now = datetime.datetime.now()
 print(str(now))
 
-dftech.to_csv(os.path.join(sA.outputdir,'SSP Quant Tech.csv'),index=False)
+quantiles.to_csv(os.path.join(sA.outputdir,'CV95 Quantiles.csv'),index=False)
+dfReplicates.to_csv(os.path.join(sA.outputdir,'SSP Quant Tech.csv'),index=False)
 dfintensity.to_csv(os.path.join(sA.outputdir,'SSP Quant.csv'),index=False)
 dfsubs.to_csv(os.path.join(sA.outputdir,'SSP PSM.csv'),index=False)
 df.to_csv(os.path.join(sA.outputdir,'AllPSMsAndFilters.csv'),index=False)
@@ -458,9 +520,10 @@ sns.violinplot(data=dfintensity,x='Sample',y='logNormalized')
 plt.suptitle('Protein normalized sub ratio')
 plt.savefig(os.path.join(sA.outputdir,'Protein normalized sub ratio.png'))
 
-for col in dfreproducability.columns:
+
+for col in CVcols:
     plt.figure()
-    plt.hist(dfreproducability[col],bins=50,range=(0,300))
+    plt.hist(dfCV[col],bins=50,range=(0,2))
     plt.xlabel(col+' CV%')
     plt.ylabel('# of substitutions')
     plt.savefig(os.path.join(sA.outputdir,col+' CV.png'))
