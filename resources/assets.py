@@ -13,6 +13,12 @@ import numpy as np
 package_dir = os.path.dirname(os.path.split(os.path.abspath(__file__))[0])
 file_path = os.path.join(package_dir, 'temp', 'data_directory.txt')
 
+def changeDir(newdir):
+    with open(file_path, "w") as f:
+        f.write(newdir)
+    inputdir = newdir
+    outputdir = os.path.join(newdir,'substitutuionAnnotation_output')
+
 
 with open(file_path, "r+") as f:
     inputdir = f.read().strip()
@@ -27,8 +33,11 @@ if not os.path.exists(outputdir):
         os.mkdir(outputdir)
     except:
         inputdir = input(inputdir +' is not a valid directory. Please try again.')
+        
     try:
-        os.mkdir(os.path.join(inputdir,'substitutionAnnotation output'))
+        os.mkdir(os.path.join(inputdir,'substitutionAnnotation_output'))
+        changeDir(inputdir)
+
     except:
         raise Exception('Cannot make that directory.')
 
@@ -115,12 +124,6 @@ aminoacids = ['Ala', 'Arg','Asn','Asp','Cys','Glu','Gln','Gly',
               'His',u'Leu/Ile','Lys','Met','Phe','Pro','Ser',
               'Thr','Trp','Tyr','Val']
 
-
-def changeDir(newdir):
-    with open(file_path, "w") as f:
-        f.write(newdir)
-        inputdir = newdir
-        outputdir = os.path.join(newdir,'substitutuionAnnotation_output')
 
 def clearDir():
     """Clears the .txt file used to store the working data directoty"""

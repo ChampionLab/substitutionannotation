@@ -13,7 +13,7 @@ import numpy as np
 import os
 import re 
 import datetime
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor,ThreadPoolExecutor, as_completed
 from tqdm import tqdm
 from substitutionannotation.resources import assets as sA
 
@@ -204,16 +204,17 @@ def ExpIL(dfin,sequencecolumn):
 
 #%%
 def getCV(ser):
-        if len(ser)<=1:
-            return np.nan
-        try:
-            result = np.std(ser)/np.mean(ser)
-        except ZeroDivisionError: 
-            result = np.nan
-        return result
+    ser = ser.dropna()
+    if len(ser)<=1:
+        return np.nan
+    try:
+        result = np.std(ser)/np.mean(ser)
+    except ZeroDivisionError: 
+        result = np.nan
+    return result
 #%%
 #Inputs
-dfdm = pd.read_csv(r'C:\Users\taylo\anaconda3\Lib\tjl\params\dmMatrix.csv',index_col=0).astype(float)
+dfdm = sA.dfdm.copy()
 if os.path.isdir(sA.outputdir):
     print('Output directory already exists -- code will overwrite existing files with common names')
 else: 
@@ -291,6 +292,8 @@ now = datetime.datetime.now()
 print(str(now))
 
 #Thanks ChatGPT for teaching me how to parallelize this and add a loading bar
+#Note this caused a RAM leak on Sprite - not compatible with hardware?
+#Confirmed the getPTMs() function was not the source of the RAM leak.
 # Define the function to process each row
 def progressFindPTM(row):
     # Code to process the row
@@ -302,7 +305,7 @@ def progressFindPTM(row):
 progress_bar = tqdm(total=len(df.index))
 
 # Parallel processing using ThreadPoolExecutor
-with ThreadPoolExecutor(max_workers=3) as executor:
+with ProcessPoolExecutor(max_workers=4) as executor:
     # Submit tasks for each row
     futures = [executor.submit(progressFindPTM, row) for _, row in df.iterrows()]
 
@@ -364,6 +367,7 @@ df['Replicate'] = df['Raw File'].apply(lambda x: fileSample.loc[x,'Replicate'])
 #Parse substituted peptides
 dfsubs = df[df['Is Sub']]
 dfsubs = dfsubs[~dfsubs['Is Danger']]
+dfsubs = dfsubs[~dfsubs['Protein'].str.contains('cont|rev_')]
 dfsubs.reset_index(inplace=True)
 
 #Get substituted position relative to the protein
@@ -393,7 +397,7 @@ dfintensity['Base Intensity'] = dfintensity.apply(GetBaseBy,axis=1)
 #Get Protein quantification
 #Set common axis for dfintensity
 
-dfintensity = dfintensity.set_index(['Protein','Sample'])
+dfintensity = dfintensity.set_index(['Protein','Sample']).reset_index()
 #Get protein quant from intensity, not MaxLFQ Intensity
 dfprot = pd.read_csv(os.path.join(sA.inputdir,'combined_protein.tsv'),sep='\t')
 protintcols = dfprot.columns[dfprot.columns.str.contains('Intensity')]
@@ -422,12 +426,10 @@ protCV = protCV.reset_index().rename(columns={'Protein Intensity':'Protein CV'})
 protbySample = protbySample.groupby(by=['Protein','Sample'])['Protein Intensity'].max()
 dfprot.index = dfprot.index.set_names(['Protein', 'Sample'])
 
-dfintensity = dfintensity.merge(protbySample, how='left',left_index=True,right_index=True)
-dfReplicates = dfReplicates.merge(dfintensity[['Base Intensity','Protein Intensity']],
-                      how='left',left_on=['Protein','Sample'],right_index=True)
-dfintensity = dfintensity.reset_index()
-dfintensity = dfintensity[~dfintensity['Protein'].str.contains('cont|rev_')]
-dfReplicates = dfReplicates[~dfReplicates['Protein'].str.contains('cont|rev_')]
+dfintensity = dfintensity.merge(protbySample, how='left',left_on=['Protein','Sample'],right_index=True)
+dfReplicates = dfReplicates.merge(dfintensity[['Modified Peptide','Sample','Base Intensity','Protein Intensity']],
+                      how='left',on=['Modified Peptide','Sample'])
+
 #Get normalized values
 
 dfintensity['logIntensity'] = np.log10(dfintensity['Intensity'].replace(0,np.nan))
@@ -452,7 +454,7 @@ dfReplicates['logNormalized'] = np.log10(dfReplicates['Normalized'].replace([0,n
 dfCV = dfReplicates.groupby(by=['Sample','Modified Peptide'])[['Peptide','Protein',]].max()
 
 #Get Substitution CV
-dfCV['Substitution CV'] = dfReplicates.groupby(by=['Sample','Modified Peptide'])['Intensity'].apply(lambda x: getCV(x))
+dfCV['Substitution CV'] = dfReplicates.groupby(by=['Sample','Modified Peptide'])['Intensity'].apply(lambda x: getCV(x.replace(0,np.nan)))
 dfCV = dfCV.reset_index()
 
 """
@@ -463,7 +465,7 @@ dfCV['Substitution CV'] = dfCV['Substitution CV'].fillna(subAverageCVs)"""
 #Get Cognate CVs
 #Get peptide abundance as max PSM abundance per replicate
 dfcognateCV = dfbase.groupby(by=['Sample','Peptide','Replicate'])['Intensity'].max()
-dfcognateCV = dfcognateCV.reset_index().groupby(by=['Sample','Peptide'])['Intensity'].apply(lambda x: getCV(x))
+dfcognateCV = dfcognateCV.reset_index().groupby(by=['Sample','Peptide'])['Intensity'].apply(lambda x: getCV(x.replace(0,np.nan)))
 dfcognateCV = dfcognateCV.reset_index().rename(columns={'Intensity':'Cognate CV'})
 """
 #Fill nan CVs with average CV for same peptide in other samples
