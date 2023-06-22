@@ -494,7 +494,7 @@ now = datetime.datetime.now()
 print(str(now))
 
 quantiles.to_csv(os.path.join(sA.outputdir,'CV95 Quantiles.csv'),index=False)
-dfReplicates.to_csv(os.path.join(sA.outputdir,'SSP Quant Tech.csv'),index=False)
+dfReplicates.to_csv(os.path.join(sA.outputdir,'SSP Quant Repicates.csv'),index=False)
 dfintensity.to_csv(os.path.join(sA.outputdir,'SSP Quant.csv'),index=False)
 dfsubs.to_csv(os.path.join(sA.outputdir,'SSP PSM.csv'),index=False)
 df.to_csv(os.path.join(sA.outputdir,'AllPSMsAndFilters.csv'),index=False)
