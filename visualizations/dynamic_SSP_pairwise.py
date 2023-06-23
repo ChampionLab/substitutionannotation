@@ -11,11 +11,13 @@ Must follow FindSubs_xxx.py
 import pandas as pd
 import numpy as np
 import plotly
+from plotly import subplots as psubplots
 import plotly.express as px
 import plotly.graph_objects as go
 from dash import Dash, html, dcc, Input, Output
 import os
 from substitutionannotation.resources import assets as sA
+
 import re
 import scipy.stats as st
 import random
@@ -61,7 +63,11 @@ CVs = dfReplicates.groupby(by=['Sample','Modified Peptide'])['Intensity'].apply(
 bioRel = quantiles['logRatio CV'].item()
 
 #get FASTA and protein sequence info
-fastadir = r"C:\Users\taylo\Documents\Notre Dame\Lab\FASTA\2022-03-26-decoys-contam-UP_2022_03_25_EcoliK12.fasta.fas"
+# Get the directory path of the current script
+script_dir = os.path.dirname(os.path.abspath(__file__))
+# Get the parent directory of the script directory
+module_dir = os.path.dirname(script_dir)
+fastadir = os.path.join(module_dir,'resources','2022-03-26-decoys-contam-UP_2022_03_25_EcoliK12.fasta.fas')
 file = open(fastadir,mode='r')
 dfproteins = pd.DataFrame(columns=['Header','Sequence'])
 i=1
@@ -243,11 +249,11 @@ def update_freq_violin(subfilter,signaltype):
 )
 def update_frequency_scatter(freq_scatter_x,freq_scatter_y,signaltype):
     
-    xdata = bySample.get_group(freq_scatter_x).groupby(by='Modified Peptide')[['Protein',signaltype]].max().dropna(subset=signaltype)
+    xdata = bySample.get_group(freq_scatter_x).groupby(by='Modified Peptide')[['Protein',signaltype]].max().dropna(subset=[signaltype])
     xSignal = str(freq_scatter_x) + ' ' + signaltype
     ySignal = str(freq_scatter_y) + ' '+ signaltype
     xdata.columns = ['Protein',xSignal]
-    ydata = bySample.get_group(freq_scatter_y).groupby(by='Modified Peptide')[['Protein',signaltype]].max().dropna(subset=signaltype)
+    ydata = bySample.get_group(freq_scatter_y).groupby(by='Modified Peptide')[['Protein',signaltype]].max().dropna(subset=[signaltype])
     ydata.columns = ['Protein',ySignal]
     dfplot = pd.merge(xdata,ydata,left_index=True,right_index=True,how='outer') 
     dfplot['Protein'] = dfplot['Protein_x'].fillna(dfplot['Protein_y'])
@@ -267,6 +273,8 @@ def update_frequency_scatter(freq_scatter_x,freq_scatter_y,signaltype):
     ymin = dfplot.loc[notMissing,ySignal].min()
     xmax = dfplot.loc[notMissing,xSignal].max()
     ymax = dfplot.loc[notMissing,ySignal].max()
+    squaremin = min([xmin,ymin])
+    squaremax = max([xmax,xmin])
 
     #Compute p value of shared data, that x < y
     (t,pval) = st.ttest_rel(dfplot.loc[notMissing,xSignal],
@@ -274,7 +282,7 @@ def update_frequency_scatter(freq_scatter_x,freq_scatter_y,signaltype):
                          alternative ='less')
     
     #Scatter plot to compare intensities, frequencies at peptide level
-    fig = plotly.subplots.make_subplots(rows=2, cols=2,
+    fig = psubplots.make_subplots(rows=2, cols=2,
                     row_heights=[0.2,0.80],
                     column_widths=[0.80,0.2],
                     vertical_spacing = 0.005,
@@ -294,8 +302,8 @@ def update_frequency_scatter(freq_scatter_x,freq_scatter_y,signaltype):
                     name = 'Shared Peptides'
                     ),
                     row=2,col=1)
-
-    fig.add_trace(go.Scatter(x=[xmin,xmax],y=[ymin,ymax],
+    # Y=X line
+    fig.add_trace(go.Scatter(x=[squaremin,squaremax],y=[squaremin,squaremax],
                              mode='lines',marker_color='rgba(130,130,130)',
                             showlegend=False,
                             line=dict(width=1),
@@ -586,7 +594,7 @@ def updateVolcanoPlot(volcanoType,volcanoNumerator,volcanoDenominator,signaltype
                      )
     
     #Output significant, unique data
-    filestr = str('VolcanoSignificant'+signaltype+volcanoNumerator+'v'+volcanoDenominator+'.csv')
+    filestr = f'VolcanoSignificant {signaltype} {volcanoNumerator}v{volcanoDenominator}.csv'
     outputcsv = os.path.join(sA.outputdir,'dynamicVisualizations',filestr)
 
     if os.path.exists(outputcsv):#No need to remake the output every time the app refreshes
