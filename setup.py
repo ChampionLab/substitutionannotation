@@ -9,7 +9,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='proteomicAnalysis',
-    version='0.001',
+    version='0.002',
     packages=find_packages(),
     install_requires=[
         'numpy',

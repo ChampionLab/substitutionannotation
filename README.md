@@ -1,2 +1,3 @@
 # substitutionannotation
 A repository for the script used to annotate and filter aa substitutions identified via mass-offset search in MSFragger
+This branch (tjlpub) is an updated version of the code used in the publication (link TBA). It is updated to be a little more like a python package, that is applicable to new sets of data without rewriting code. That said it is far from python-package ready. It has improved handling of sample and replicate annotations from Fragpipe, and calculates possible artificial/biological modifications as the unmodified m/z +/- the observed ppm error rather than the modified m/z +/- 25 ppm error.
