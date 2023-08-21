@@ -1,2 +1,8 @@
 # substitutionannotation
-A repository for the script used to annotate and filter aa substitutions identified via mass-offset search in MSFragger
+A repository for the script used to annotate and filter aa substitutions identified via mass-offset search in [MSFragger](https://fragpipe.nesvilab.org/). For more information on it's initial application, see the preprint [A Fit for Purpose Approach to Evaluate Detection of Amino Acid Substitutions in Shotgun Proteomics](https://doi.org/10.1101/2023.08.09.552645). The 'main' and 'publicationver' branches reflect the script as used for this publication. The 'tjlpub' branch has some updates, mostly to make the script more re-usable and robust to different file names or sample annotations.
+
+MSFraggerFindSubs.py (updated to FindSubs_Fragpipe_PSM.py in the tjlpub branch) takes the output of a mass-offset search from MSFragger, and annotates PSMs identified with a mass-offset as a substitution or other peptide modification. It outputs a list of PSMs that correspond to peptide sequences with an amino acid substitution.
+
+FindSP.py takes the tryptic peptide lists from [ProteaseGuru](https://github.com/smith-chem-wisc/ProteaseGuru) and finds sequences that differ by a single amino acid, accounting for changed peptide cleavage by removing the C-terminal lysine or arginine. 
+
+Note that these scripts includes some hard coded paths. MSFraggerFindSubs.py in the main/publication ver hard codes the path to the output folder of MSFragger (variable 'inputdir'), and to the dangermods.csv and dfdm.csv included here. These hard coded paths need to be changed in the code in order to use this script. The tjlpub branch has some first steps to make this more python-package like and should work when you run FindSubs_Fragpipe_PSM.py, prompting you for the data directory. FindSSP.py is still hardcoded to reference two ProteaseGuru output peptide lists, use tryptic cleavage rules, and output file paths.
