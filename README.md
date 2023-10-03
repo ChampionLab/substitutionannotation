@@ -18,7 +18,7 @@ To run MSFraggerFindSubs.py, you will need to open the script (either in an IDE 
 
 -Line 36 The csv with the mass offset of other post translational modifications, 'dangermods.csv'. dfdm=pd.read_csv(r'your/download/path/substitutionannotation/dangermods.csv',index_col=0)
 
-Save the file, then run the script either from an IDE or in the terminal with 'python run your/download/path/substitutionannotation/MSFraggerFindSubs.py'. The results will be output to a FindSubsOutput folder within your MSFragger search result folder.
+Save the file, then run the script either from an IDE or in the terminal with 'python run your/download/path/substitutionannotation/MSFraggerFindSubs.py'. The results will be output to a FindSubsOutput folder within your MSFragger search result folder. This should take ~15 minutes with the tutorial data, depending on the speed of your computer.
 
 To run FindSSP.py, you will likewise need to open and edit the hardcoded paths:
 
@@ -30,4 +30,4 @@ Line 70 - Output directory for the results of every peptide in list 1, regardles
 
 Line 71 - Output directory for peptides that represent a single amino acid substitution. dfSSP.to_csv('your/output/path/SALTYagaisntECOLIssp.csv')
 
-Note that the outputs of FindSSP.py will name the output columns for peptide sequences in the first list to 'Salty Sequence' and the second list to 'EColi SSP Peptide'.
+Note that the outputs of FindSSP.py will name the output columns for peptide sequences in the first list to 'Salty Sequence' and the second list to 'EColi SSP Peptide'. Also note that this code written for simple application of the logic using a number of loops, and therefore takes a long time (up to a week) to run. It should not use much computational resources.  
