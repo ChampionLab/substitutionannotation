@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Created on Thu Feb 25 11:43:35 2021
-
+Note: this code has hardcoded paths for inputdir, dfdm, dfdangermods
 @author: taylorlundgren
 """
 """Program to count the subs from FragPipe v17,
