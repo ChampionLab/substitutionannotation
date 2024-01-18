@@ -1,5 +1,5 @@
 # substitutionannotation
-A repository for the script used to annotate and filter aa substitutions identified via mass-offset search in [MSFragger](https://fragpipe.nesvilab.org/). For more information on it's initial application, see the preprint [A Fit for Purpose Approach to Evaluate Detection of Amino Acid Substitutions in Shotgun Proteomics](https://doi.org/10.1101/2023.08.09.552645). The 'main' and 'publicationver' branches reflect the script as used for this publication. The 'tjlpub' branch has some updates, mostly to make the script more re-usable and robust to different file names or sample annotations.
+A repository for the script used to annotate and filter aa substitutions identified via mass-offset search in [MSFragger](https://fragpipe.nesvilab.org/). For more information on it's initial application, see the preprint [A Fit for Purpose Approach to Evaluate Detection of Amino Acid Substitutions in Shotgun Proteomics](https://doi.org/10.1101/2023.08.09.552645). The 'main' branch reflect the script as used for this publication. The 'tjlpub' branch has some updates, mostly to make the script more re-usable and robust to different file names or sample annotations.
 
 MSFraggerFindSubs.py (updated to FindSubs_Fragpipe_PSM.py in the tjlpub branch) takes the output of a mass-offset search from MSFragger, and annotates PSMs identified with a mass-offset as a substitution or other peptide modification. It outputs a list of PSMs that correspond to peptide sequences with an amino acid substitution.
 
@@ -22,12 +22,10 @@ Save the file, then run the script either from an IDE or in the terminal with 'p
 
 To run FindSSP.py, you will likewise need to open and edit the hardcoded paths:
 
-Line 31 - Path to the first ProteaseGuru peptide list, in the tutorial of salmonella peptides. dfsalty = pd.read_csv('your/download/path/substitutionannotation/tutorialdata/Salty_Peptides_1.tsv', sep='\t',usecols=['Base Sequence'])
+Line 25 - Path to the first ProteaseGuru peptide list, in the tutorial of salmonella peptides. dfsalty = pd.read_csv('your/download/path/substitutionannotation/tutorialdata/Salty_Peptides_1.tsv', sep='\t',usecols=['Base Sequence'])
 
-Line 32 - Path to the second ProteaseGuru peptide list, in the tutorial of e. coli peptides. dfecoli = pd.read_csv('your/download/path/substitutionannotation/tutorialdata/Coli_Peptides_1.tsv', sep='\t',usecols=['Base Sequence'])
+Line 26 - Path to the second ProteaseGuru peptide list, in the tutorial of e. coli peptides. dfecoli = pd.read_csv('your/download/path/substitutionannotation/tutorialdata/Coli_Peptides_1.tsv', sep='\t',usecols=['Base Sequence'])
 
-Line 70 - Output directory for the results of every peptide in list 1, regardless of if a single substitution was identified. dfsalty.to_csv('your/output/path/SALTYagainstECOLIsspUnfiltered.csv')
+Line 30 - Output directory for all outputs of the script
 
-Line 71 - Output directory for peptides that represent a single amino acid substitution. dfSSP.to_csv('your/output/path/SALTYagaisntECOLIssp.csv')
-
-Note that the outputs of FindSSP.py will name the output columns for peptide sequences in the first list to 'Salty Sequence' and the second list to 'EColi SSP Peptide'. Also note that this code written for simple application of the logic using a number of loops, and therefore takes a long time (up to a week) to run. It should not use much computational resources.  
+Note that the outputs of FindSSP.py will name the output columns for peptide sequences 'ECOLI SSP Sequence' and the second list to 'SALTY SSP Sequence'. This script will likely take hours to run.
