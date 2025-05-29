@@ -1,0 +1,33 @@
+﻿Modification,Observed Modifications,Mass Shift,Modified Residues,Modified Position
+Proline oxidation to pyrrolidinone ,Proline oxidation to pyrrolidinone ,-30.010565,P,-1
+Homoserine,Homoserine,-29.992806,M,
+Pyro-glu from E,pyro-Glu,-18.010565,E,1
+Dehydration,Dehydrated,-18.010565,"X,D,Y,T,S",
+Pyro-glu from Q/Loss of ammonia,Ammonia-loss,-17.026549,"Q,N,K,R,C,X",1
+Half of a disulfide bridge,Half of a disulfide bridge,-1.007825,C,
+Amidation,Amidated,-0.984016,X,
+Unmodified,Unmodified,0,X,
+Deamidation,Deamidated,0.984016,"N,Q,R",
+First isotopic peak,First isotopic peak,1.003355,X,
+Second isotopic peak,Second isotopic peak,2.00671,X,
+Third isotopic peak/13C3 label for SILAC,Third isotopic peak/13C3 label for SILAC,3.010065,X,
+oxidation of trp to kynurenine,oxidation of trp to kynurenine,3.995,W,
+formaldehyde adduct,formaldehyde adduct,12,X,
+Methylation,Methyl,14.01565,"K,R,D,T,S,H,E,Q,N",
+Oxidation and Hydroxylation,Oxidation,15.994915,X,
+Ammonium,replacement of proton with ammonium ion,17.026549,DE,-1
+Proline oxidation to 5-hydroxy-2-aminovaleric acid,Proline oxidation to 5-hydroxy-2-aminovaleric acid,18.010565,P,
+Sodium adduct,Sodium adduct,21.981943,"X,D,E",
+formylation,formylation,27.995,M,1
+di-Methylation/Acetaldehyde +28/Ethylation,Dimethyl,28.0313,"K,R,D,E",
+dihydroxy,Dioxidation,31.989829,"C,Y,W,R,P,K,F,M",
+Replacement of proton by potassium,Replacement of proton by potassium,37.955882,"D,E",-1
+S-carbamoylmethylcysteine cyclization (N-terminus),S-carbamoylmethylcysteine cyclization (N-terminus),39.994915,C,1
+Acetylation,Acetyl,42.010565,"T,S,C,Y,H,K",1
+Carbamylation,Carbamyl,43.005814,K,1
+Replacement of 3 protons by iron,Replacement of 3 protons by iron,52.911464,"D,E",-1
+Replacement of 2 protons by iron,Replacement of 2 protons by iron,53.919289,"D,E",-1
+Carbamidomethylation,Carbamidomethylation,57.021464,"C,K,D,H,E",1
+Phosphorylation,Phosphorylation,79.966331,"S,T,Y",
+Addition of lysine due to transpeptidation/Addition of K,Addition of lysine due to transpeptidation/Addition of K,128.094963,X,
+Biotinylation,Biotinylation,226.077598,K,1
